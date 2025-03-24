@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenStreetMap - Commute Portal</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    <style>
+        #map { height: 100vh; width: 100vw; }
+        #controls { position: absolute; top: 10px; left: 10px; background: #fff; padding: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3); z-index: 1000; }
+        #history { position: absolute; bottom: 10px; left: 10px; background: #fff; padding: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3); z-index: 1000; max-height: 200px; overflow-y: auto; width: 300px; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="controls">
+        <label>Start: <input type="text" id="start" placeholder="Enter starting point (e.g., 40.7128,-74.0060)"></label>
+        <label>Destination: <input type="text" id="end" placeholder="Enter destination (e.g., 51.5074,-0.1278)"></label>
+        <button onclick="calculateRoute()">Get Route</button>
+        <button onclick="setCurrentLocation()">Current Location</button>
+        <button onclick="clearHistory()">Clear History</button>
+    </div>
+
+    <div id="history">
+        <h3>Commute History</h3>
+        <ul id="history-list"></ul>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+
+    <!-- 🚨 Removed auth.js (it doesn't exist) -->
+    <!-- Authentication should be handled via API calls, not a separate frontend file -->
+    
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const map = L.map('map').setView([0, 0], 13);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            let currentLocation;
+            let routeControl;
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function (position) {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    currentLocation = [lat, lon];
+                    map.setView(currentLocation, 13);
+
+                    L.marker(currentLocation).addTo(map)
+                        .bindPopup("You are here!").openPopup();
+                }, function (error) {
+                    alert("Error getting location: " + error.message);
+                });
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+
+            function setCurrentLocation() {
+                if (!currentLocation) {
+                    alert("Current location not available. Please allow location access.");
+                } else {
+                    document.getElementById("start").value = currentLocation.join(',');
+                }
+            }
+
+            function calculateRoute() {
+                if (routeControl) { map.removeControl(routeControl); }
+
+                const startInput = document.getElementById("start").value;
+                const endInput = document.getElementById("end").value;
+
+                const start = startInput ? L.latLng(...startInput.split(',').map(Number)) : L.latLng(currentLocation);
+                const end = endInput ? L.latLng(...endInput.split(',').map(Number)) : null;
+
+                if (!end) {
+                    alert("Please enter a valid destination.");
+                    return;
+                }
+
+                routeControl = L.Routing.control({
+                    waypoints: [start, end],
+                    routeWhileDragging: true
+                }).addTo(map);
+
+                routeControl.on('routesfound', function (e) {
+                    const route = e.routes[0];
+                    const distance = (route.summary.totalDistance / 1000).toFixed(2);
+                    const duration = Math.ceil(route.summary.totalTime / 60);
+
+                    addToHistory(startInput || "Current Location", endInput, distance, duration);
+                });
+            }
+
+            function addToHistory(start, end, distance, duration) {
+                const historyList = document.getElementById("history-list");
+                const listItem = document.createElement("li");
+                listItem.textContent = `Start: ${start} → End: ${end} | ${distance} km | ${duration} min`;
+                historyList.appendChild(listItem);
+            }
+
+            function clearHistory() {
+                document.getElementById("history-list").innerHTML = "";
+                if (routeControl) { map.removeControl(routeControl); }
+            }
+
+            window.calculateRoute = calculateRoute;
+            window.clearHistory = clearHistory;
+            window.setCurrentLocation = setCurrentLocation;
+        });
+    </script>
+</body>
+</html>
